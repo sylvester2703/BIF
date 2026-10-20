@@ -1,0 +1,227 @@
+%pip install biopython
+"""
+# DNA Sequence Analysis - Small Code
+
+from Bio.Seq import Seq
+from Bio.SeqUtils import gc_fraction
+
+dna = input("Enter DNA sequence(Eg. ATGCTAGCTAGCTCGATCGATCGATC): ").upper().replace(" ", "").replace("\n", "")
+motif = input("Enter motif to find: ").upper()
+
+# Basic sequence manipulation
+seq = Seq(dna)
+print("\nDNA Sequence:", seq)
+print("Length:", len(seq), "bp")
+print("Complement:", seq.complement())
+print("Reverse Complement:", seq.reverse_complement())
+
+# GC content
+gc = gc_fraction(seq) * 100 if dna else 0
+print(f"GC Content: {gc:.2f}%")
+
+# Find motif positions (1-based)
+positions = [i + 1 for i in range(len(dna))
+             if dna.startswith(motif, i)] if motif else []
+print("Motif positions:", positions if positions else "Not found")
+
+# Identify ORFs beginning with ATG and ending with a stop codon
+stop = {"TAA", "TAG", "TGA"}
+orfs = []
+
+for frame in range(3):
+    for i in range(frame, len(dna) - 2, 3):
+        if dna[i:i+3] == "ATG":
+            for j in range(i + 3, len(dna) - 2, 3):
+                if dna[j:j+3] in stop:
+                    orfs.append((i + 1, j + 3, dna[i:j+3]))
+                    break
+
+print("\nPotential Coding Regions (ORFs):")
+for start, end, region in orfs:
+    print(f"Start: {start}, End: {end}, Length: {len(region)} bp")
+if not orfs:
+    print("No complete ORFs found.")
+
+# Report summary
+with open("DNA_Analysis_Report.txt", "w") as f:
+    f.write("DNA SEQUENCE ANALYSIS REPORT\n")
+    f.write(f"Sequence length: {len(dna)} bp\n")
+    f.write(f"GC content: {gc:.2f}%\n")
+    f.write(f"Motif: {motif}\n")
+    f.write(f"Motif positions (1-based): {positions}\n")
+    f.write(f"Potential complete ORFs found: {len(orfs)}\n")
+    for start, end, region in orfs:
+        f.write(f"ORF: {start}-{end}, length: {len(region)} bp\n")
+
+print("\nReport saved as DNA_Analysis_Report.txt")
+"""
+#Long Code:-
+# DNA Sequence Analysis - General Code
+
+from Bio.Seq import Seq
+from Bio.SeqUtils import gc_fraction
+import matplotlib.pyplot as plt
+from collections import Counter
+
+# 1. Input DNA sequence
+dna = input("Enter DNA sequence(Eg. ATGCTAGCTAGCTCGATCGATCGATC): ").upper()
+dna = "".join(dna.split())
+
+# Validate sequence
+if not dna:
+    raise ValueError("DNA sequence cannot be empty.")
+
+if any(base not in "ATGC" for base in dna):
+    raise ValueError("Invalid DNA sequence. Use only A, T, G and C.")
+
+seq = Seq(dna)
+length = len(dna)
+
+# 2. Basic sequence analysis
+print("\n--- BASIC SEQUENCE ANALYSIS ---")
+print("DNA Sequence:", dna)
+print("Sequence Length:", length, "bp")
+print("Complement:", seq.complement())
+print("Reverse Complement:", seq.reverse_complement())
+
+# 3. Nucleotide frequency
+counts = Counter(dna)
+
+print("\n--- NUCLEOTIDE FREQUENCY ---")
+for base in "ATGC":
+    print(f"{base}: {counts[base]}")
+
+# 4. GC content
+gc_content = gc_fraction(seq) * 100
+
+print("\n--- GC CONTENT ---")
+print(f"GC Content: {gc_content:.2f}%")
+print(f"AT Content: {100 - gc_content:.2f}%")
+
+# 5. Motif search
+motif = input("\nEnter motif to search (e.g., ATG): ").upper().strip()
+
+if not motif or any(base not in "ATGC" for base in motif):
+    raise ValueError("Enter a valid DNA motif using A, T, G and C.")
+
+motif_positions = [
+    i + 1 for i in range(length)
+    if dna.startswith(motif, i)
+]
+
+print("\n--- MOTIF ANALYSIS ---")
+print("Motif:", motif)
+print("Number of occurrences:", len(motif_positions))
+print("Positions (1-based):", motif_positions)
+
+# 6. Identify complete ORFs in all three forward reading frames
+stop_codons = {"TAA", "TAG", "TGA"}
+orfs = []
+
+for frame in range(3):
+    start_positions = []
+
+    for i in range(frame, length - 2, 3):
+        codon = dna[i:i + 3]
+
+        if codon == "ATG":
+            start_positions.append(i)
+
+        if codon in stop_codons:
+            for start in start_positions:
+                region = dna[start:i + 3]
+
+                orfs.append({
+                    "start": start + 1,
+                    "end": i + 3,
+                    "length": len(region),
+                    "frame": frame + 1,
+                    "sequence": region
+                })
+
+            start_positions = []
+
+print("\n--- CODING REGION ANALYSIS ---")
+print("Complete ORFs found:", len(orfs))
+
+for index, orf in enumerate(orfs, start=1):
+    print(f"\nORF {index}")
+    print("Start:", orf["start"])
+    print("End:", orf["end"])
+    print("Length:", orf["length"], "bp")
+    print("Reading frame:", orf["frame"])
+    print("DNA:", orf["sequence"])
+    print("Protein:", Seq(orf["sequence"]).translate(to_stop=True))
+
+if not orfs:
+    print("No complete ORFs found in the forward reading frames.")
+
+# 7. Visualize nucleotide composition
+bases = list("ATGC")
+frequencies = [counts[base] for base in bases]
+
+plt.figure(figsize=(7, 4))
+plt.bar(bases, frequencies)
+plt.title("DNA Nucleotide Composition")
+plt.xlabel("Nucleotide")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.show()
+
+# 8. Generate analysis report
+with open("DNA_Analysis_Report.txt", "w", encoding="utf-8") as report:
+    report.write("DNA SEQUENCE ANALYSIS REPORT\n")
+    report.write("=" * 35 + "\n\n")
+
+    report.write(f"Sequence: {dna}\n")
+    report.write(f"Sequence length: {length} bp\n")
+    report.write(f"Complement: {seq.complement()}\n")
+    report.write(f"Reverse complement: {seq.reverse_complement()}\n\n")
+
+    report.write("NUCLEOTIDE COMPOSITION\n")
+    for base in bases:
+        report.write(f"{base}: {counts[base]}\n")
+
+    report.write(f"\nGC content: {gc_content:.2f}%\n")
+    report.write(f"AT content: {100 - gc_content:.2f}%\n")
+
+    report.write("\nMOTIF ANALYSIS\n")
+    report.write(f"Motif: {motif}\n")
+    report.write(f"Occurrences: {len(motif_positions)}\n")
+    report.write(f"Positions (1-based): {motif_positions}\n")
+
+    report.write("\nCODING REGION ANALYSIS\n")
+    report.write(f"Complete ORFs found: {len(orfs)}\n")
+
+    for index, orf in enumerate(orfs, start=1):
+        report.write(f"\nORF {index}\n")
+        report.write(
+            f"Start: {orf['start']}, End: {orf['end']}, "
+            f"Length: {orf['length']} bp, "
+            f"Frame: {orf['frame']}\n"
+        )
+        report.write(f"DNA: {orf['sequence']}\n")
+        report.write(
+            f"Protein: {Seq(orf['sequence']).translate(to_stop=True)}\n"
+        )
+
+    report.write("\nINSIGHTS\n")
+    report.write(
+        f"The sequence contains {length} nucleotides, "
+        f"with GC content of {gc_content:.2f}%.\n"
+    )
+    report.write(
+        f"The motif '{motif}' occurs {len(motif_positions)} time(s).\n"
+    )
+    report.write(
+        f"{len(orfs)} complete ORF(s) were identified "
+        "in the three forward reading frames.\n"
+    )
+    report.write(
+        "ORFs are potential coding regions and require further "
+        "biological validation before being considered genes.\n"
+    )
+
+print("\nAnalysis complete.")
+print("Visualization generated.")
+print("Report saved as DNA_Analysis_Report.txt")
