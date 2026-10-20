@@ -1,0 +1,458 @@
+#Assignment: Machine Learning for Genomic Data.
+# Machine Learning for Genomic Data - Small Code
+%pip install numpy pandas matplotlib scikit-learn pydeseq2
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (
+    accuracy_score, classification_report,
+    confusion_matrix, ConfusionMatrixDisplay
+)
+
+# 1. Generate sample genomic data
+np.random.seed(42)
+
+X = np.random.randint(0, 3, size=(300, 20))
+y = ((X[:, 0] + X[:, 1] + X[:, 2]) >= 3).astype(int)
+
+features = [f"Marker_{i+1}" for i in range(20)]
+df = pd.DataFrame(X, columns=features)
+df["Class"] = y
+
+print("Dataset preview:")
+print(df.head())
+
+# 2. Split data
+X_train, X_test, y_train, y_test = train_test_split(
+    df[features], y, test_size=0.2,
+    random_state=42, stratify=y
+)
+
+# 3. Train Random Forest
+model = RandomForestClassifier(
+    n_estimators=100, random_state=42
+)
+model.fit(X_train, y_train)
+
+# 4. Predictions and evaluation
+pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, pred)
+print("\nAccuracy:", round(accuracy * 100, 2), "%")
+print("\nClassification Report:\n",
+      classification_report(y_test, pred, zero_division=0))
+
+ConfusionMatrixDisplay(
+    confusion_matrix(y_test, pred)
+).plot()
+plt.title("Genomic Classification")
+plt.show()
+
+# 5. Feature importance
+importance = pd.Series(
+    model.feature_importances_, index=features
+).sort_values(ascending=False)
+
+print("\nTop Predictive Markers:")
+print(importance.head(10))
+
+importance.head(10).sort_values().plot(kind="barh")
+plt.xlabel("Feature Importance")
+plt.title("Top Genomic Markers")
+plt.tight_layout()
+plt.show()
+
+# 6. Save report
+df.to_csv("Genomic_Dataset.csv", index=False)
+importance.to_csv("Genomic_Feature_Importance.csv")
+
+with open("Genomic_Analysis_Report.txt", "w") as f:
+    f.write("MACHINE LEARNING FOR GENOMIC DATA\n\n")
+    f.write(f"Samples: {len(df)}\n")
+    f.write(f"Genetic markers: {len(features)}\n")
+    f.write(f"Accuracy: {accuracy:.4f}\n\n")
+    f.write(classification_report(y_test, pred, zero_division=0))
+    f.write("\n\nFeature Importance:\n")
+    f.write(importance.to_string())
+
+print("\nDataset, feature importance and report saved.")
+
+"""
+#Long Code:-
+# Machine Learning for Genomic Data - General Code
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    f1_score, confusion_matrix, classification_report,
+    ConfusionMatrixDisplay, roc_auc_score, RocCurveDisplay
+)
+
+from sklearn.inspection import permutation_importance
+
+# --------------------------------------------------
+# 1. GENERATE SYNTHETIC GENOMIC DATA
+# --------------------------------------------------
+
+np.random.seed(42)
+
+n_samples = 500
+n_markers = 25
+
+markers = [f"Marker_{i+1}" for i in range(n_markers)]
+
+# Simulated SNP genotypes:
+# 0 = no alternate allele
+# 1 = one alternate allele
+# 2 = two alternate alleles
+X = np.random.binomial(
+    2, 0.3, size=(n_samples, n_markers)
+)
+
+# Generate a binary outcome influenced by selected markers
+risk_score = (
+    1.5 * X[:, 0]
+    + 1.2 * X[:, 1]
+    + 1.0 * X[:, 2]
+    + 0.8 * X[:, 3]
+    + np.random.normal(0, 1.5, n_samples)
+)
+
+y = (risk_score > np.median(risk_score)).astype(int)
+
+df = pd.DataFrame(X, columns=markers)
+df["Class"] = y
+
+print("Dataset shape:", df.shape)
+print("\nFirst five samples:")
+print(df.head())
+
+print("\nClass distribution:")
+print(df["Class"].value_counts())
+
+# Save generated dataset
+df.to_csv("Genomic_Dataset.csv", index=False)
+
+# --------------------------------------------------
+# 2. PREPARE TRAINING AND TEST DATA
+# --------------------------------------------------
+
+X = df[markers]
+y = df["Class"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+
+print("\nTraining samples:", len(X_train))
+print("Testing samples:", len(X_test))
+
+# --------------------------------------------------
+# 3. TRAIN MACHINE LEARNING MODELS
+# --------------------------------------------------
+
+models = {
+    "Random Forest": RandomForestClassifier(
+        n_estimators=200,
+        max_depth=None,
+        random_state=42,
+        class_weight="balanced"
+    ),
+
+    "SVM": make_pipeline(
+        StandardScaler(),
+        SVC(
+            kernel="rbf",
+            C=1.0,
+            probability=True,
+            class_weight="balanced",
+            random_state=42
+        )
+    )
+}
+
+results = {}
+predictions = {}
+probabilities = {}
+
+for name, model in models.items():
+    model.fit(X_train, y_train)
+
+    pred = model.predict(X_test)
+    prob = model.predict_proba(X_test)[:, 1]
+
+    predictions[name] = pred
+    probabilities[name] = prob
+
+    results[name] = {
+        "Accuracy": accuracy_score(y_test, pred),
+        "Precision": precision_score(
+            y_test, pred, zero_division=0
+        ),
+        "Recall": recall_score(
+            y_test, pred, zero_division=0
+        ),
+        "F1 Score": f1_score(
+            y_test, pred, zero_division=0
+        ),
+        "ROC AUC": roc_auc_score(y_test, prob)
+    }
+
+# --------------------------------------------------
+# 4. COMPARE MODEL PERFORMANCE
+# --------------------------------------------------
+
+performance = pd.DataFrame(results).T
+
+print("\n--- MODEL PERFORMANCE COMPARISON ---")
+print(performance.round(4))
+
+performance.to_csv("Model_Performance.csv")
+
+# Cross-validation on training data
+print("\n--- 5-FOLD CROSS-VALIDATION ---")
+
+cv_results = {}
+
+for name, model in models.items():
+    scores = cross_val_score(
+        model,
+        X_train,
+        y_train,
+        cv=5,
+        scoring="accuracy"
+    )
+
+    cv_results[name] = scores
+
+    print(
+        f"{name}: Mean accuracy = {scores.mean():.4f}, "
+        f"Std = {scores.std():.4f}"
+    )
+
+# --------------------------------------------------
+# 5. CLASSIFICATION REPORTS
+# --------------------------------------------------
+
+for name in models:
+    print(f"\n--- {name} ---")
+
+    print(
+        classification_report(
+            y_test,
+            predictions[name],
+            target_names=["Class 0", "Class 1"],
+            zero_division=0
+        )
+    )
+
+# --------------------------------------------------
+# 6. CONFUSION MATRICES
+# --------------------------------------------------
+
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+
+for ax, name in zip(axes, models):
+    cm = confusion_matrix(
+        y_test, predictions[name], labels=[0, 1]
+    )
+
+    ConfusionMatrixDisplay(
+        cm, display_labels=["Class 0", "Class 1"]
+    ).plot(ax=ax, colorbar=False)
+
+    ax.set_title(name)
+
+plt.tight_layout()
+plt.savefig("Genomic_Confusion_Matrices.png", dpi=300)
+plt.show()
+
+# --------------------------------------------------
+# 7. ROC CURVE COMPARISON
+# --------------------------------------------------
+
+plt.figure(figsize=(7, 5))
+
+for name in models:
+    RocCurveDisplay.from_predictions(
+        y_test,
+        probabilities[name],
+        name=name
+    )
+
+plt.plot([0, 1], [0, 1], linestyle="--")
+plt.title("ROC Curve Comparison")
+plt.tight_layout()
+plt.savefig("Genomic_ROC_Curve.png", dpi=300)
+plt.show()
+
+# --------------------------------------------------
+# 8. FEATURE IMPORTANCE
+# --------------------------------------------------
+
+# Random Forest's built-in feature importance
+rf_model = models["Random Forest"]
+
+rf_importance = pd.Series(
+    rf_model.feature_importances_,
+    index=markers,
+    name="Random_Forest_Importance"
+).sort_values(ascending=False)
+
+print("\n--- RANDOM FOREST FEATURE IMPORTANCE ---")
+print(rf_importance.head(10))
+
+rf_importance.to_csv("Random_Forest_Feature_Importance.csv")
+
+# Permutation importance for both models
+permutation_results = {}
+
+for name, model in models.items():
+    perm = permutation_importance(
+        model,
+        X_test,
+        y_test,
+        n_repeats=10,
+        random_state=42,
+        scoring="accuracy"
+    )
+
+    permutation_results[name] = pd.Series(
+        perm.importances_mean,
+        index=markers
+    ).sort_values(ascending=False)
+
+# Plot Random Forest importance
+rf_importance.head(10).sort_values().plot(
+    kind="barh", figsize=(8, 5)
+)
+
+plt.xlabel("Importance")
+plt.title("Top Predictive Genomic Markers - Random Forest")
+plt.tight_layout()
+plt.savefig("Genomic_Feature_Importance.png", dpi=300)
+plt.show()
+
+# Save permutation importance
+perm_df = pd.DataFrame(permutation_results)
+perm_df.to_csv("Permutation_Feature_Importance.csv")
+
+# --------------------------------------------------
+# 9. GENERATE COMPREHENSIVE REPORT
+# --------------------------------------------------
+
+best_model_name = performance["F1 Score"].idxmax()
+
+with open(
+    "Genomic_Analysis_Report.txt",
+    "w",
+    encoding="utf-8"
+) as report:
+
+    report.write("MACHINE LEARNING FOR GENOMIC DATA\n")
+    report.write("=" * 45 + "\n\n")
+
+    report.write("1. DATASET DESCRIPTION\n")
+    report.write(f"Number of samples: {n_samples}\n")
+    report.write(f"Number of genetic markers: {n_markers}\n")
+    report.write("Genotype encoding: 0, 1, 2\n")
+    report.write("Dataset type: Synthetic demonstration data\n")
+    report.write("Target: Simulated binary class\n\n")
+
+    report.write("2. METHODOLOGY\n")
+    report.write(
+        "The dataset was divided into 80% training and "
+        "20% testing data using stratified sampling.\n"
+    )
+    report.write(
+        "Random Forest and an RBF-kernel SVM were trained. "
+        "Feature scaling was applied within the SVM pipeline.\n"
+    )
+    report.write(
+        "Five-fold cross-validation was performed on the "
+        "training set.\n\n"
+    )
+
+    report.write("3. MODEL PERFORMANCE\n")
+    report.write(performance.round(4).to_string())
+    report.write("\n\n")
+
+    report.write("4. CROSS-VALIDATION RESULTS\n")
+
+    for name, scores in cv_results.items():
+        report.write(
+            f"{name}: Mean accuracy = {scores.mean():.4f}, "
+            f"Standard deviation = {scores.std():.4f}\n"
+        )
+
+    report.write("\n5. CLASSIFICATION REPORTS\n")
+
+    for name in models:
+        report.write(f"\n{name}\n")
+        report.write(
+            classification_report(
+                y_test,
+                predictions[name],
+                target_names=["Class 0", "Class 1"],
+                zero_division=0
+            )
+        )
+
+    report.write("\n6. TOP RANDOM FOREST MARKERS\n")
+    report.write(rf_importance.head(10).to_string())
+
+    report.write("\n\n7. BIOLOGICAL INTERPRETATION\n")
+    report.write(
+        "Markers with higher feature importance contributed "
+        "more to the fitted model's predictions. Permutation "
+        "importance estimates the reduction in predictive "
+        "accuracy when a feature is shuffled.\n"
+    )
+    report.write(
+        "The target labels were generated from selected markers, "
+        "so the dataset contains an intentionally simulated "
+        "relationship. These findings are not real genetic "
+        "associations and must not be interpreted as disease "
+        "risk or evidence of biological causation.\n"
+    )
+    report.write(
+        "Validation on independent real genomic data and "
+        "biological annotation of markers are needed for "
+        "meaningful scientific conclusions.\n\n"
+    )
+
+    report.write("8. CONCLUSION\n")
+    report.write(
+        f"The model with the highest test F1 score was "
+        f"{best_model_name}. Model performance should be "
+        "interpreted alongside precision, recall, ROC AUC "
+        "and cross-validation results.\n"
+    )
+
+print("\nAnalysis completed successfully.")
+print("\nGenerated files:")
+print("1. Genomic_Dataset.csv")
+print("2. Model_Performance.csv")
+print("3. Random_Forest_Feature_Importance.csv")
+print("4. Permutation_Feature_Importance.csv")
+print("5. Genomic_Confusion_Matrices.png")
+print("6. Genomic_ROC_Curve.png")
+print("7. Genomic_Feature_Importance.png")
+print("8. Genomic_Analysis_Report.txt")
+"""
