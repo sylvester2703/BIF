@@ -1,0 +1,782 @@
+
+#Assignment: RNA-Seq Data Analysis
+# RNA-Seq Differential Gene Expression Analysis
+
+%pip install pydeseq2 pandas numpy matplotlib
+%pip install statsmodels scipy
+    
+"""
+# RNA-Seq Analysis - Small Code
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import ttest_ind
+from statsmodels.stats.multitest import multipletests
+
+# Load raw gene counts
+df = pd.read_csv("rnaseq_counts.csv", index_col=0)
+
+# Validate input
+if df.shape[1] < 6:
+    raise ValueError("Provide at least 3 control and 3 treatment samples.")
+
+if not df.index.is_unique:
+    raise ValueError("Gene IDs must be unique.")
+
+if df.isna().any().any() or (df < 0).any().any():
+    raise ValueError("Counts must be non-negative and contain no missing values.")
+
+if not np.isfinite(df.to_numpy(dtype=float)).all():
+    raise ValueError("Counts contain infinite or invalid values.")
+
+if not np.allclose(df.to_numpy(dtype=float),
+                   np.round(df.to_numpy(dtype=float))):
+    raise ValueError("Use raw integer read counts.")
+
+df = df.astype(int)
+df = df.loc[df.sum(axis=1) >= 10]
+
+control = df.iloc[:, :3]
+treatment = df.iloc[:, 3:6]
+
+# Calculate fold changes and Welch's t-tests
+log2fc = (
+    np.log2(treatment.mean(axis=1) + 1)
+    - np.log2(control.mean(axis=1) + 1)
+)
+
+pvalues = [
+    ttest_ind(
+        np.log2(treatment.loc[g] + 1),
+        np.log2(control.loc[g] + 1),
+        equal_var=False
+    ).pvalue
+    for g in df.index
+]
+
+# Correct p-values for multiple testing
+padj = multipletests(pvalues, method="fdr_bh")[1]
+
+results = pd.DataFrame({
+    "Control_Mean": control.mean(axis=1),
+    "Treatment_Mean": treatment.mean(axis=1),
+    "Log2_Fold_Change": log2fc,
+    "P_Value": pvalues,
+    "Adjusted_P_Value": padj
+}, index=df.index)
+
+results["Status"] = "Not Significant"
+
+sig = (
+    (results["Adjusted_P_Value"] < 0.05)
+    & (results["Log2_Fold_Change"].abs() >= 1)
+)
+
+results.loc[
+    sig & (results["Log2_Fold_Change"] > 0), "Status"
+] = "Upregulated"
+
+results.loc[
+    sig & (results["Log2_Fold_Change"] < 0), "Status"
+] = "Downregulated"
+
+results.sort_values("Adjusted_P_Value").to_csv(
+    "Differential_Expression_Results.csv"
+)
+
+print(results.sort_values("Adjusted_P_Value").head(10))
+print("\nUpregulated:", (results["Status"] == "Upregulated").sum())
+print("Downregulated:", (results["Status"] == "Downregulated").sum())
+
+# Volcano plot
+plot = results.dropna(subset=["Adjusted_P_Value"]).copy()
+plot["neg_log10_padj"] = -np.log10(
+    plot["Adjusted_P_Value"].clip(lower=1e-300)
+)
+
+plt.figure(figsize=(8, 5))
+plt.scatter(plot["Log2_Fold_Change"], plot["neg_log10_padj"])
+plt.axvline(1, linestyle="--")
+plt.axvline(-1, linestyle="--")
+plt.axhline(-np.log10(0.05), linestyle="--")
+plt.xlabel("Log2 Fold Change")
+plt.ylabel("-Log10 Adjusted P-value")
+plt.title("RNA-Seq Differential Expression")
+plt.tight_layout()
+plt.savefig("RNASeq_Volcano_Plot.png", dpi=300)
+plt.show()
+
+with open("RNASeq_Report.txt", "w", encoding="utf-8") as f:
+    f.write("RNA-SEQ ANALYSIS REPORT\n\n")
+    f.write(f"Genes analyzed: {len(results)}\n")
+    f.write(f"Upregulated: {(results['Status'] == 'Upregulated').sum()}\n")
+    f.write(f"Downregulated: {(results['Status'] == 'Downregulated').sum()}\n\n")
+    f.write(results.to_string())
+
+print("\nSaved Differential_Expression_Results.csv")
+print("Saved RNASeq_Volcano_Plot.png and RNASeq_Report.txt")
+"""
+
+"""
+#Long Code:-
+# RNA-Seq Differential Gene Expression Analysis - General Code
+# RNA-Seq Differential Gene Expression Analysis
+# General Code - External Dataset
+# Compatible with PyDESeq2 0.5.4
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+
+# --------------------------------------------------
+# 1. LOAD DATA
+# --------------------------------------------------
+
+counts = pd.read_csv("rnaseq_counts.csv", index_col=0)
+metadata = pd.read_csv("sample_metadata.csv")
+
+counts.index = counts.index.astype(str)
+counts.columns = counts.columns.astype(str)
+
+if not counts.index.is_unique:
+    raise ValueError("Gene IDs in the count matrix must be unique.")
+
+if not counts.columns.is_unique:
+    raise ValueError("Sample names in the count matrix must be unique.")
+
+if not {"sample", "condition"}.issubset(metadata.columns):
+    raise ValueError(
+        "Metadata must contain 'sample' and 'condition' columns."
+    )
+
+metadata["sample"] = metadata["sample"].astype(str)
+metadata["condition"] = metadata["condition"].astype(str)
+
+if metadata["sample"].duplicated().any():
+    raise ValueError("Sample names in metadata must be unique.")
+
+metadata = metadata.set_index("sample")
+
+if set(counts.columns) != set(metadata.index):
+    raise ValueError(
+        "Sample names in counts and metadata must match exactly."
+    )
+
+# --------------------------------------------------
+# 2. VALIDATE AND ALIGN DATA
+# --------------------------------------------------
+
+metadata = metadata.loc[counts.columns]
+
+if metadata["condition"].isna().any():
+    raise ValueError("Condition labels cannot be missing.")
+
+if metadata["condition"].nunique() != 2:
+    raise ValueError("Exactly two conditions are required.")
+
+values = counts.to_numpy(dtype=float)
+
+if not np.isfinite(values).all():
+    raise ValueError("Count matrix contains missing or infinite values.")
+
+if (values < 0).any():
+    raise ValueError("Counts cannot be negative.")
+
+if not np.allclose(values, np.round(values)):
+    raise ValueError("Use raw integer read counts, not TPM or FPKM.")
+
+counts = counts.astype(int)
+
+# PyDESeq2 0.5.4 expects:
+# Rows = samples
+# Columns = genes
+count_df = counts.T.copy()
+
+# Ensure metadata follows the same sample order
+metadata = metadata.loc[count_df.index]
+
+assert count_df.index.equals(metadata.index)
+
+# At least 2 replicates per group are needed computationally;
+# 3 or more biological replicates per group are recommended.
+group_sizes = metadata["condition"].value_counts()
+
+if (group_sizes < 2).any():
+    raise ValueError("Each condition needs at least 2 samples.")
+
+print("Count matrix (samples x genes):", count_df.shape)
+print("\nSample distribution:")
+print(group_sizes)
+
+# --------------------------------------------------
+# 3. FILTER LOW-COUNT GENES
+# --------------------------------------------------
+
+count_df = count_df.loc[:, count_df.sum(axis=0) >= 10]
+
+if count_df.shape[1] == 0:
+    raise ValueError("No genes remain after low-count filtering.")
+
+print("\nGenes retained:", count_df.shape[1])
+
+# --------------------------------------------------
+# 4. SET REFERENCE AND TREATMENT CONDITIONS
+# --------------------------------------------------
+
+conditions = metadata["condition"].unique()
+
+# Prefer Control as reference when present
+if "Control" in conditions:
+    reference = "Control"
+    treatment = next(c for c in conditions if c != reference)
+else:
+    reference, treatment = conditions[0], conditions[1]
+
+metadata["condition"] = pd.Categorical(
+    metadata["condition"],
+    categories=[reference, treatment]
+)
+
+# --------------------------------------------------
+# 5. DIFFERENTIAL EXPRESSION ANALYSIS
+# --------------------------------------------------
+
+dds = DeseqDataSet(
+    counts=count_df,
+    metadata=metadata,
+    design="~condition",
+    refit_cooks=True,
+    n_cpus=1
+)
+
+dds.deseq2()
+
+stats = DeseqStats(
+    dds,
+    contrast=("condition", treatment, reference),
+    n_cpus=1
+)
+
+stats.summary()
+
+results = stats.results_df.copy()
+results.index.name = "gene_id"
+
+# --------------------------------------------------
+# 6. CLASSIFY DIFFERENTIALLY EXPRESSED GENES
+# --------------------------------------------------
+
+results["Status"] = "Not Significant"
+
+significant = (
+    results["padj"].notna()
+    & (results["padj"] < 0.05)
+    & (results["log2FoldChange"].abs() >= 1)
+)
+
+results.loc[
+    significant & (results["log2FoldChange"] > 0),
+    "Status"
+] = "Upregulated"
+
+results.loc[
+    significant & (results["log2FoldChange"] < 0),
+    "Status"
+] = "Downregulated"
+
+# --------------------------------------------------
+# 7. ADD FUNCTIONAL ANNOTATIONS IF AVAILABLE
+# --------------------------------------------------
+
+results = results.reset_index()
+
+try:
+    annotation = pd.read_csv("gene_annotation.csv")
+
+    required = {"gene_id", "gene_name", "description"}
+
+    if not required.issubset(annotation.columns):
+        raise ValueError(
+            "Annotation file must contain gene_id, gene_name, "
+            "and description columns."
+        )
+
+    annotation["gene_id"] = annotation["gene_id"].astype(str)
+
+    if annotation["gene_id"].duplicated().any():
+        raise ValueError(
+            "Annotation file contains duplicate gene IDs."
+        )
+
+    results = results.merge(
+        annotation,
+        on="gene_id",
+        how="left",
+        validate="one_to_one"
+    )
+
+    print("\nFunctional annotation file loaded.")
+
+except FileNotFoundError:
+    results["gene_name"] = results["gene_id"]
+    results["description"] = "Annotation not provided"
+    print("\nNo annotation file found; reporting gene IDs only.")
+
+results = results.sort_values("padj", na_position="last")
+
+upregulated = results[results["Status"] == "Upregulated"]
+downregulated = results[results["Status"] == "Downregulated"]
+
+differential = results[
+    results["Status"].isin(["Upregulated", "Downregulated"])
+]
+
+# --------------------------------------------------
+# 8. DISPLAY RESULTS
+# --------------------------------------------------
+
+print("\n--- DIFFERENTIAL EXPRESSION SUMMARY ---")
+print("Reference:", reference)
+print("Treatment:", treatment)
+print("Genes analyzed:", len(results))
+print("Upregulated genes:", len(upregulated))
+print("Downregulated genes:", len(downregulated))
+print("Significant genes:", len(differential))
+
+print("\nTop significant genes:")
+print(differential.head(10).to_string(index=False))
+
+# --------------------------------------------------
+# 9. SAVE RESULTS
+# --------------------------------------------------
+
+results.to_csv("RNASeq_Differential_Expression.csv", index=False)
+upregulated.to_csv("Upregulated_Genes.csv", index=False)
+downregulated.to_csv("Downregulated_Genes.csv", index=False)
+
+# --------------------------------------------------
+# 10. GENERATE VOLCANO PLOT
+# --------------------------------------------------
+
+plot_df = results.dropna(
+    subset=["log2FoldChange", "padj"]
+).copy()
+
+plot_df["neg_log10_padj"] = -np.log10(
+    plot_df["padj"].clip(lower=1e-300)
+)
+
+plt.figure(figsize=(9, 6))
+
+for status in [
+    "Not Significant", "Upregulated", "Downregulated"
+]:
+    subset = plot_df[plot_df["Status"] == status]
+
+    plt.scatter(
+        subset["log2FoldChange"],
+        subset["neg_log10_padj"],
+        label=status,
+        alpha=0.7,
+        s=20
+    )
+
+plt.axvline(1, linestyle="--")
+plt.axvline(-1, linestyle="--")
+plt.axhline(-np.log10(0.05), linestyle="--")
+
+plt.xlabel("Log2 Fold Change")
+plt.ylabel("-Log10 Adjusted P-value")
+plt.title("RNA-Seq Differential Gene Expression")
+plt.legend()
+plt.tight_layout()
+plt.savefig("RNASeq_Volcano_Plot.png", dpi=300)
+plt.show()
+
+# --------------------------------------------------
+# 11. GENERATE DETAILED REPORT
+# --------------------------------------------------
+
+with open("RNASeq_Analysis_Report.txt", "w", encoding="utf-8") as report:
+
+    report.write("RNA-SEQ DIFFERENTIAL EXPRESSION REPORT\n")
+    report.write("=" * 45 + "\n\n")
+
+    report.write(f"Reference condition: {reference}\n")
+    report.write(f"Treatment condition: {treatment}\n")
+    report.write(f"Samples analyzed: {len(metadata)}\n")
+    report.write(f"Genes analyzed: {len(results)}\n")
+    report.write(f"Upregulated genes: {len(upregulated)}\n")
+    report.write(f"Downregulated genes: {len(downregulated)}\n")
+    report.write(f"Significant genes: {len(differential)}\n\n")
+
+    report.write("SIGNIFICANCE CRITERIA\n")
+    report.write("Adjusted p-value < 0.05\n")
+    report.write("Absolute log2 fold change >= 1\n\n")
+
+    report.write("TOP DIFFERENTIALLY EXPRESSED GENES\n")
+    report.write(
+        differential.head(20).to_string(index=False)
+        if not differential.empty
+        else "No genes met both significance thresholds."
+    )
+
+    report.write("\n\nUPREGULATED GENES\n")
+    report.write(
+        upregulated.to_string(index=False)
+        if not upregulated.empty else "None identified."
+    )
+
+    report.write("\n\nDOWNREGULATED GENES\n")
+    report.write(
+        downregulated.to_string(index=False)
+        if not downregulated.empty else "None identified."
+    )
+
+    report.write("\n\nBIOLOGICAL INTERPRETATION\n")
+    report.write(
+        f"Positive log2 fold changes indicate higher expression "
+        f"in {treatment} relative to {reference}. Negative values "
+        "indicate lower expression.\n"
+    )
+
+    report.write(
+        "\nFunctional interpretation requires verified gene "
+        "annotations and, ideally, pathway enrichment analysis. "
+        "Differential expression alone does not establish causation.\n"
+    )
+
+print("\nAnalysis completed successfully.")
+print("\nGenerated files:")
+print("1. RNASeq_Differential_Expression.csv")
+print("2. Upregulated_Genes.csv")
+print("3. Downregulated_Genes.csv")
+print("4. RNASeq_Volcano_Plot.png")
+print("5. RNASeq_Analysis_Report.txt") 
+    
+"""
+
+
+# Assignment: RNA-Seq Data Analysis
+# Differential Gene Expression Analysis
+# No external dataset required
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+
+# --------------------------------------------------
+# 1. GENERATE SYNTHETIC RNA-SEQ DATA
+# --------------------------------------------------
+
+np.random.seed(42)
+
+n_genes = 500
+samples = ["C1", "C2", "C3", "T1", "T2", "T3"]
+genes = [f"Gene_{i:03d}" for i in range(1, n_genes + 1)]
+
+# Generate baseline expression levels
+baseline = np.random.gamma(
+    shape=3, scale=30, size=n_genes
+)
+
+# Rows = genes, columns = samples initially
+raw_counts = np.zeros((n_genes, len(samples)), dtype=int)
+
+# Control samples
+for j in range(3):
+    raw_counts[:, j] = np.random.poisson(baseline)
+
+# Treatment samples
+for j in range(3, 6):
+    raw_counts[:, j] = np.random.poisson(baseline)
+
+# Simulate upregulated genes
+for j in range(3, 6):
+    raw_counts[:30, j] = np.random.poisson(
+        baseline[:30] * 3
+    )
+
+# Simulate downregulated genes
+for j in range(3, 6):
+    raw_counts[30:60, j] = np.random.poisson(
+        baseline[30:60] / 3
+    )
+
+# Build gene-by-sample DataFrame
+gene_counts = pd.DataFrame(
+    raw_counts,
+    index=genes,
+    columns=samples
+)
+
+# IMPORTANT FIX:
+# PyDESeq2 expects samples in rows and genes in columns.
+count_df = gene_counts.T.copy()
+
+# Sample metadata: one row per sample
+metadata = pd.DataFrame(
+    {
+        "condition": [
+            "Control", "Control", "Control",
+            "Treatment", "Treatment", "Treatment"
+        ]
+    },
+    index=samples
+)
+
+# Simulated annotation information
+annotations = pd.DataFrame({
+    "gene_id": genes,
+    "gene_name": genes,
+    "description": [
+        "Simulated gene; biological function unknown"
+        for _ in genes
+    ]
+})
+
+print("Count matrix shape:", count_df.shape)
+print("Metadata shape:", metadata.shape)
+print("\nSample metadata:")
+print(metadata)
+
+# Validate sample alignment
+assert count_df.index.equals(metadata.index)
+
+# Save generated dataset
+gene_counts.to_csv("Synthetic_RNASeq_Counts.csv")
+
+# --------------------------------------------------
+# 2. FILTER LOW-COUNT GENES
+# --------------------------------------------------
+
+# Columns now represent genes
+count_df = count_df.loc[
+    :, count_df.sum(axis=0) >= 10
+]
+
+if count_df.empty:
+    raise ValueError("No genes remain after filtering.")
+
+print("\nFiltered count matrix:", count_df.shape)
+
+# --------------------------------------------------
+# 3. DIFFERENTIAL EXPRESSION ANALYSIS
+# --------------------------------------------------
+
+dds = DeseqDataSet(
+    counts=count_df,
+    metadata=metadata,
+    design="~condition",
+    refit_cooks=True,
+    n_cpus=1
+)
+
+dds.deseq2()
+
+# Compare Treatment against Control
+stat = DeseqStats(
+    dds,
+    contrast=("condition", "Treatment", "Control"),
+    n_cpus=1
+)
+
+stat.summary()
+
+results = stat.results_df.copy()
+results.index.name = "gene_id"
+
+# --------------------------------------------------
+# 4. CLASSIFY DIFFERENTIALLY EXPRESSED GENES
+# --------------------------------------------------
+
+results["Status"] = "Not Significant"
+
+valid = results["padj"].notna()
+
+up = (
+    valid
+    & (results["padj"] < 0.05)
+    & (results["log2FoldChange"] >= 1)
+)
+
+down = (
+    valid
+    & (results["padj"] < 0.05)
+    & (results["log2FoldChange"] <= -1)
+)
+
+results.loc[up, "Status"] = "Upregulated"
+results.loc[down, "Status"] = "Downregulated"
+
+# --------------------------------------------------
+# 5. ADD FUNCTIONAL ANNOTATION
+# --------------------------------------------------
+
+results = results.reset_index().merge(
+    annotations,
+    on="gene_id",
+    how="left",
+    validate="one_to_one"
+)
+
+results = results.sort_values(
+    "padj", na_position="last"
+)
+
+upregulated = results[
+    results["Status"] == "Upregulated"
+]
+
+downregulated = results[
+    results["Status"] == "Downregulated"
+]
+
+significant = results[
+    results["Status"].isin(
+        ["Upregulated", "Downregulated"]
+    )
+]
+
+print("\n--- ANALYSIS SUMMARY ---")
+print("Genes analyzed:", len(results))
+print("Upregulated genes:", len(upregulated))
+print("Downregulated genes:", len(downregulated))
+print("Significant genes:", len(significant))
+
+print("\nTop differentially expressed genes:")
+print(significant.head(10).to_string(index=False))
+
+# --------------------------------------------------
+# 6. GENERATE VOLCANO PLOT
+# --------------------------------------------------
+
+plot_df = results.dropna(
+    subset=["log2FoldChange", "padj"]
+).copy()
+
+plot_df["MinusLog10Padj"] = -np.log10(
+    plot_df["padj"].clip(lower=1e-300)
+)
+
+plt.figure(figsize=(9, 6))
+
+for status in [
+    "Not Significant",
+    "Upregulated",
+    "Downregulated"
+]:
+    subset = plot_df[plot_df["Status"] == status]
+
+    plt.scatter(
+        subset["log2FoldChange"],
+        subset["MinusLog10Padj"],
+        label=status,
+        alpha=0.7,
+        s=20
+    )
+
+plt.axvline(1, linestyle="--")
+plt.axvline(-1, linestyle="--")
+plt.axhline(-np.log10(0.05), linestyle="--")
+
+plt.xlabel("Log2 Fold Change")
+plt.ylabel("-Log10 Adjusted P-value")
+plt.title("RNA-Seq Differential Gene Expression")
+plt.legend()
+plt.tight_layout()
+plt.savefig("RNASeq_Volcano_Plot.png", dpi=300)
+plt.show()
+
+# --------------------------------------------------
+# 7. SAVE RESULTS
+# --------------------------------------------------
+
+results.to_csv(
+    "RNASeq_Differential_Expression.csv",
+    index=False
+)
+
+upregulated.to_csv(
+    "Upregulated_Genes.csv", index=False
+)
+
+downregulated.to_csv(
+    "Downregulated_Genes.csv", index=False
+)
+
+# --------------------------------------------------
+# 8. GENERATE DETAILED REPORT
+# --------------------------------------------------
+
+with open(
+    "RNASeq_Analysis_Report.txt",
+    "w",
+    encoding="utf-8"
+) as report:
+
+    report.write("RNA-SEQ ANALYSIS REPORT\n")
+    report.write("=" * 40 + "\n\n")
+
+    report.write("Dataset: Synthetic RNA-Seq counts\n")
+    report.write("Method: PyDESeq2\n")
+    report.write("Comparison: Treatment versus Control\n")
+    report.write("Adjusted p-value threshold: 0.05\n")
+    report.write("Absolute log2 fold-change threshold: 1\n\n")
+
+    report.write(f"Samples analyzed: {len(metadata)}\n")
+    report.write(f"Genes analyzed: {len(results)}\n")
+    report.write(f"Upregulated genes: {len(upregulated)}\n")
+    report.write(f"Downregulated genes: {len(downregulated)}\n")
+    report.write(f"Significant genes: {len(significant)}\n\n")
+
+    report.write("TOP DIFFERENTIALLY EXPRESSED GENES\n")
+    report.write("-" * 40 + "\n")
+
+    if significant.empty:
+        report.write(
+            "No genes met both significance thresholds.\n"
+        )
+    else:
+        report.write(
+            significant.head(20).to_string(index=False)
+        )
+        report.write("\n")
+
+    report.write("\nFUNCTIONAL ANNOTATION\n")
+    report.write(
+        "Gene descriptions are placeholders because the "
+        "dataset is synthetic. Real biological annotations "
+        "and pathway enrichment are not included.\n"
+    )
+
+    report.write("\nBIOLOGICAL INTERPRETATION\n")
+    report.write(
+        f"{len(upregulated)} genes were classified as "
+        "upregulated and "
+        f"{len(downregulated)} as downregulated in Treatment "
+        "relative to Control.\n"
+    )
+
+    report.write(
+        "These results demonstrate a computational workflow "
+        "and do not establish genuine biological findings. "
+        "Real RNA-Seq data and verified annotations are "
+        "required for biological conclusions.\n"
+    )
+
+print("\nAnalysis completed successfully.")
+print("\nGenerated files:")
+print("1. Synthetic_RNASeq_Counts.csv")
+print("2. RNASeq_Differential_Expression.csv")
+print("3. Upregulated_Genes.csv")
+print("4. Downregulated_Genes.csv")
+print("5. RNASeq_Volcano_Plot.png")
+print("6. RNASeq_Analysis_Report.txt")
