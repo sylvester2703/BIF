@@ -1,4 +1,3 @@
-#Assignment 01
 # DNA Sequence Analysis
 %pip install numpy pandas matplotlib scikit-learn seaborn scipy kneed nltk requests beautifulsoup4 biopython pydeseq2 openpyxl folium
 from Bio.Seq import Seq
