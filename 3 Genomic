@@ -140,3 +140,26 @@ for file in [
     "Genomic_Feature_Importance.png", "Genomic_Analysis_Report.txt"
 ]:
     print(file)
+#DNA: Contains genetic information of living organism. A-T G-C 
+#RNA: Found in living cell that helps use genetic information to rpoduce protiens helps carry and use that information to make protiens A-U-G-C
+#Genomic: Obtained from organims genome including dna sequnce genes etc
+#genomic: biological info stored in dna scientist study to unerstand characteristics
+#amino acid: Organic molecule that acts as building block of protien  20 amino acid Amino group(-NH2), carboxyl group(-COOH), Hydrogen atom
+#intron: segment of gene transcribed into rna but is removed during rna processing before mature mrna is used to make protien
+#Exon: Segment of gene that remains in mature RNA after slicing
+#CAAD- COmputer Aided Drug Design: USe of computer to discover design and develop new drugs  predict how drug molecules will behave in body
+#BIF:uses computer to understand biological information 
+# Output Explanation:
+# Random Forest achieved 72% accuracy, meaning it correctly classified 72 out of 100 test samples.
+# SVM achieved 73% accuracy, slightly better than Random Forest.
+# SVM also achieved a higher ROC-AUC of 0.8348, indicating better class-separation ability.
+# Therefore, SVM performed slightly better overall on this dataset.
+# The classification report shows precision, recall and F1-score for both classes.
+# Higher values indicate better classification performance.
+# Both models performed reasonably well on the two classes.
+# The confusion matrix shows correct and incorrect predictions.
+# Random Forest correctly classified 37 class-0 and 35 class-1 samples.
+# SVM correctly classified 38 class-0 and 35 class-1 samples.
+# The feature-importance graph identifies which genetic markers contributed most to prediction.
+# Marker_1 and Marker_2 have the highest importance in this model.
+# These markers are useful for classification, but this does not prove biological causation.
