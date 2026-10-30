@@ -1,4 +1,3 @@
-#Assignment 02
 # RNA-Seq Differential Gene Expression Analysis
 # Compatible with PyDESeq2 0.5.4
 %pip install numpy pandas matplotlib scikit-learn seaborn scipy kneed nltk requests beautifulsoup4 biopython "pydeseq2==0.5.4" openpyxl folium
