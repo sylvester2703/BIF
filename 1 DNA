@@ -30,17 +30,30 @@ print("\n--- GC CONTENT ---")
 print(f"GC Content: {gc_content:.2f}%")
 print(f"AT Content: {at_content:.2f}%")
 # 5. Search for a DNA motif
-motif = input("\nEnter motif to search (e.g., ATG): ").upper().strip()
-if not motif or any(base not in "ATGC" for base in motif):
-    raise ValueError("Enter a valid DNA motif using A, T, G and C.")
-motif_positions = [
-    i + 1 for i in range(length)
-    if dna.startswith(motif, i)
-]
+while True:
+    motif = input("\nEnter motif to search (e.g., ATG) or type 'exit' to skip: ").upper().strip()
+    if motif == "EXIT":
+        print("Motif search cancelled.")
+        motif = ""
+        motif_positions = []
+        motif_searched = False
+        break
+    if not motif or any(base not in "ATGC" for base in motif):
+        print("Invalid motif! Use only A, T, G and C. Try again.")
+        continue
+    motif_positions = [
+        i + 1 for i in range(length)
+        if dna.startswith(motif, i)
+    ]
+    motif_searched = True
+    break
 print("\n--- MOTIF ANALYSIS ---")
-print("Motif:", motif)
-print("Number of occurrences:", len(motif_positions))
-print("Positions (1-based):", motif_positions)
+if motif_searched:
+    print("Motif:", motif)
+    print("Number of occurrences:", len(motif_positions))
+    print("Positions (1-based):", motif_positions)
+else:
+    print("Motif search was skipped.")
 # 6. Identify complete ORFs in all six reading frames
 stop_codons = {"TAA", "TAG", "TGA"}
 orfs = []
@@ -111,9 +124,12 @@ with open("DNA_Analysis_Report.txt", "w", encoding="utf-8") as report:
     report.write(f"\nGC Content: {gc_content:.2f}%\n")
     report.write(f"AT Content: {at_content:.2f}%\n")
     report.write("\nMOTIF ANALYSIS\n")
-    report.write(f"Motif: {motif}\n")
-    report.write(f"Occurrences: {len(motif_positions)}\n")
-    report.write(f"Positions (1-based): {motif_positions}\n")
+    if motif_searched:
+        report.write(f"Motif: {motif}\n")
+        report.write(f"Occurrences: {len(motif_positions)}\n")
+        report.write(f"Positions (1-based): {motif_positions}\n")
+    else:
+        report.write("Motif search was skipped by the user.\n")
     report.write("\nCODING REGION ANALYSIS\n")
     report.write(f"Complete ORFs found: {len(orfs)}\n")
     for index, orf in enumerate(orfs, start=1):
@@ -133,9 +149,12 @@ with open("DNA_Analysis_Report.txt", "w", encoding="utf-8") as report:
         f"The sequence contains {length} nucleotides, "
         f"with GC content of {gc_content:.2f}%.\n"
     )
-    report.write(
-        f"The motif '{motif}' occurs {len(motif_positions)} time(s).\n"
-    )
+    if motif_searched:
+        report.write(
+            f"The motif '{motif}' occurs {len(motif_positions)} time(s).\n"
+        )
+    else:
+        report.write("Motif searching was skipped.\n")
     report.write(
         f"{len(orfs)} complete ORFs were identified "
         "across the six reading frames.\n"
@@ -148,15 +167,18 @@ with open("DNA_Analysis_Report.txt", "w", encoding="utf-8") as report:
 print("\nAnalysis complete.")
 print("Visualization generated.")
 print("Report saved as DNA_Analysis_Report.txt")
-#DNA: Contains genetic information of living organism. A-T G-C 
-#RNA: Found in living cell that helps use genetic information to rpoduce protiens helps carry and use that information to make protiens A-U-G-C
-#Genomic: Obtained from organims genome including dna sequnce genes etc
-#genomic: biological info stored in dna scientist study to unerstand characteristics
-#amino acid: Organic molecule that acts as building block of protien  20 amino acid Amino group(-NH2), carboxyl group(-COOH), Hydrogen atom
-#intron: segment of gene transcribed into rna but is removed during rna processing before mature mrna is used to make protien
-#Exon: Segment of gene that remains in mature RNA after slicing
-#CAAD- COmputer Aided Drug Design: USe of computer to discover design and develop new drugs  predict how drug molecules will behave in body
-#BIF:uses computer to understand biological information 
+#Why do we calculate the complement of DNA: To identify the matching DNA strand using A-T and G-C base-pairing rule
+#Why do we calculate the reverse complement: To analyze the opposite DNA strand in its correct 5′ to 3′ direction.
+#5′ to 3′ direction: It is the natural direction in which a DNA strand is read or synthesized
+#DNA: Contains genetic information of living organism. A-T G-C
+#RNA: Found in living cell that helps use genetic information to produce proteins. A-U-G-C
+#Genomic: Obtained from organism's genome including DNA sequence, genes etc.
+#genomic: Biological information stored in DNA. Scientists study it to understand characteristics.
+#amino acid: Organic molecule that acts as building block of protein. 20 amino acids. Amino group(-NH2), carboxyl group(-COOH), Hydrogen atom.
+#intron: Segment of gene transcribed into RNA but is removed during RNA processing before mature mRNA is used to make protein.
+#Exon: Segment of gene that remains in mature RNA after splicing.
+#CAAD- Computer Aided Drug Design: Use of computer to discover, design and develop new drugs and predict how drug molecules will behave in body.
+#BIF: Uses computer to understand biological information.
 # OUTPUT EXPLANATION:
 # 1. Displays DNA sequence, length, complement and reverse complement.
 # 2. Shows the count of A, T, G and C nucleotides.
