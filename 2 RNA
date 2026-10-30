@@ -1,6 +1,4 @@
-# RNA-Seq Differential Gene Expression Analysis
-# Compatible with PyDESeq2 0.5.4
-%pip install numpy pandas matplotlib scikit-learn seaborn scipy kneed nltk requests beautifulsoup4 biopython "pydeseq2==0.5.4" openpyxl folium
+%pip install numpy pandas matplotlib scikit-learn seaborn scipy kneed nltk openpyxl folium requests beautifulsoup4 biopython "pydeseq2==0.5.4" 
 import os
 import numpy as np
 import pandas as pd
@@ -233,6 +231,15 @@ with open(
             "\nThis report uses synthetic demonstration data, "
             "not real biological evidence.\n"
         )
+#DNA: Contains genetic information of living organism. A-T G-C 
+#RNA: Found in living cell that helps use genetic information to rpoduce protiens helps carry and use that information to make protiens A-U-G-C
+#Genomic: Obtained from organims genome including dna sequnce genes etc
+#genomic: biological info stored in dna scientist study to unerstand characteristics
+#amino acid: Organic molecule that acts as building block of protien  20 amino acid Amino group(-NH2), carboxyl group(-COOH), Hydrogen atom
+#intron: segment of gene transcribed into rna but is removed during rna processing before mature mrna is used to make protien
+#Exon: Segment of gene that remains in mature RNA after slicing
+#CAAD- COmputer Aided Drug Design: USe of computer to discover design and develop new drugs  predict how drug molecules will behave in body
+#BIF:uses computer to understand biological information 
 # OUTPUT EXPLANATION:
 # 1. Displays the number of genes analyzed and significant genes.
 # 2. Identifies upregulated and downregulated genes.
