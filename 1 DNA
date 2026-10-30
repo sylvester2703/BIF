@@ -1,4 +1,3 @@
-# DNA Sequence Analysis
 %pip install numpy pandas matplotlib scikit-learn seaborn scipy kneed nltk requests beautifulsoup4 biopython pydeseq2 openpyxl folium
 from Bio.Seq import Seq
 from Bio.SeqUtils import gc_fraction
@@ -149,6 +148,15 @@ with open("DNA_Analysis_Report.txt", "w", encoding="utf-8") as report:
 print("\nAnalysis complete.")
 print("Visualization generated.")
 print("Report saved as DNA_Analysis_Report.txt")
+#DNA: Contains genetic information of living organism. A-T G-C 
+#RNA: Found in living cell that helps use genetic information to rpoduce protiens helps carry and use that information to make protiens A-U-G-C
+#Genomic: Obtained from organims genome including dna sequnce genes etc
+#genomic: biological info stored in dna scientist study to unerstand characteristics
+#amino acid: Organic molecule that acts as building block of protien  20 amino acid Amino group(-NH2), carboxyl group(-COOH), Hydrogen atom
+#intron: segment of gene transcribed into rna but is removed during rna processing before mature mrna is used to make protien
+#Exon: Segment of gene that remains in mature RNA after slicing
+#CAAD- COmputer Aided Drug Design: USe of computer to discover design and develop new drugs  predict how drug molecules will behave in body
+#BIF:uses computer to understand biological information 
 # OUTPUT EXPLANATION:
 # 1. Displays DNA sequence, length, complement and reverse complement.
 # 2. Shows the count of A, T, G and C nucleotides.
